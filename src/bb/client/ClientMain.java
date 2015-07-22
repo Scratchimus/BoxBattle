@@ -1,5 +1,8 @@
 package bb.client;
 
+/**
+ * Manages general client-side things, calling ticking/drawing, etc
+ */
 public class ClientMain {
 	
 	private static ClientMain client;
