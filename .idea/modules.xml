@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/bb-client/bb-client.iml" filepath="$PROJECT_DIR$/bb-client/bb-client.iml" />
+      <module fileurl="file://$PROJECT_DIR$/bb-common/bb-common.iml" filepath="$PROJECT_DIR$/bb-common/bb-common.iml" />
+      <module fileurl="file://$PROJECT_DIR$/bb-server/bb-server.iml" filepath="$PROJECT_DIR$/bb-server/bb-server.iml" />
+      <module fileurl="file://$PROJECT_DIR$/box-battle.iml" filepath="$PROJECT_DIR$/box-battle.iml" />
+    </modules>
+  </component>
+</project>

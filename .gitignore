@@ -1,0 +1,7 @@
+.git
+.idea
+.metadata
+bin
+.classpath
+.gitignore
+.project
