@@ -1,5 +1,7 @@
 package com.bb.common.net;
 
+import com.bb.common.data.ClientKeyEvent;
+import com.bb.common.data.GameWorld;
 import com.bb.common.data.PlayerPosition;
 
 /**
@@ -28,10 +30,16 @@ public class DataAccumulator {
         if (hasData()) {
             int pos = builder.indexOf(DELIMITER);
             String data = builder.substring(0, pos);
-            builder.replace(0, pos+DELIMITER.length(), "");
+            builder.replace(0, pos + DELIMITER.length(), "");
 
             if (PlayerPosition.matches(data)) {
                 return PlayerPosition.parse(data);
+            } else if (GameWorld.matches(data)) {
+                return GameWorld.parse(data);
+            } else if (ClientKeyEvent.matches(data)) {
+                return ClientKeyEvent.parse(data);
+            } else {
+                System.out.println("Unknown data starting with '" + data.substring(0, 10) + "...'");
             }
         }
 

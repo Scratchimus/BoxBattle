@@ -1,6 +1,9 @@
 package com.bb.common.net;
 
+import com.bb.common.data.ClientKeyEvent;
+import com.bb.common.data.GameWorld;
 import com.bb.common.data.PlayerPosition;
+import com.bb.common.data.TerrainType;
 
 import javax.swing.*;
 import java.awt.*;
@@ -20,8 +23,9 @@ import java.util.*;
 public class DemoClient extends JPanel implements KeyListener {
     private String playerId;
     private PlayerPosition myPosition;
+    private volatile GameWorld gameWorld;
     private Map<String, PlayerPosition> gameState;
-    private boolean[] keyIsDown;
+    private volatile ClientKeyEvent current;
 
     public static void main(String[] args) throws IOException {
         JFrame host = new JFrame();
@@ -34,13 +38,7 @@ public class DemoClient extends JPanel implements KeyListener {
     }
 
     public DemoClient() {
-        playerId = "";
-        for (int ii=0; ii<10; ii++) {
-            playerId += (char)('a' + (int)(Math.random() * 20));
-        }
-        myPosition = new PlayerPosition(playerId, 50, 50);
         gameState = new HashMap<>();
-        keyIsDown = new boolean[256];
 
         Dimension dim = new Dimension(800, 600);
         setSize(dim);
@@ -70,19 +68,12 @@ public class DemoClient extends JPanel implements KeyListener {
                 DataAccumulator dac = new DataAccumulator();
                 ByteBuffer buffer = ByteBuffer.allocate(1024);
 
-                long lastTransmitTime = 0;
-
                 while (true) {
-                    updateSelf();
-
                     readUpdatesFromServer(dac, buffer);
 
                     processUpdatesFromServer(dac);
 
-                    if (System.currentTimeMillis() - lastTransmitTime > 20) {
-                        sendPositionToServer(sc);
-                        lastTransmitTime = System.currentTimeMillis();
-                    }
+                    sendInputUpdatesToServer();
 
                     Thread.sleep(5);
                 }
@@ -91,12 +82,10 @@ public class DemoClient extends JPanel implements KeyListener {
             }
         }
 
-        private void updateSelf() {
-            if (keyIsDown[KeyEvent.VK_UP]) {
-                myPosition.setY(myPosition.getY()-1);
-            }
-            if (keyIsDown[KeyEvent.VK_DOWN]) {
-                myPosition.setY(myPosition.getY()+1);
+        private void sendInputUpdatesToServer() throws IOException {
+            ClientKeyEvent toSend = current;
+            if (toSend != null) {
+                sc.write(ByteBuffer.wrap((toSend.toString() + DataAccumulator.DELIMITER).getBytes()));
             }
         }
 
@@ -111,16 +100,20 @@ public class DemoClient extends JPanel implements KeyListener {
         private void processUpdatesFromServer(DataAccumulator dac) {
             while (dac.hasData()) {
                 Object obj = dac.getData();
-                if (obj instanceof PlayerPosition) {
+                if (obj instanceof GameWorld) {
+                    gameWorld = (GameWorld)obj;
+                } else if (obj instanceof PlayerPosition) {
                     PlayerPosition pos = (PlayerPosition)obj;
+
+                    if (playerId == null) {
+                        // The first player position sent will always be for ME
+                        myPosition = pos;
+                        playerId = pos.getPlayerId();
+                    }
+
                     synchronized (gameState) {
                         gameState.put(pos.getPlayerId(), pos);
                     }
-                    // TODO: Figure out how to do this in a way that the server isn't always clobbering the client
-//                            if (pos.getPlayerId().equals(playerId)) {
-//                                myPosition.setX(pos.getX());
-//                                myPosition.setY(pos.getY());
-//                            }
                 }
             }
         }
@@ -149,6 +142,19 @@ public class DemoClient extends JPanel implements KeyListener {
                     positions.addAll(gameState.values());
                 }
 
+                if (gameWorld != null) {
+                    for (int xx = 0; xx < gameWorld.getSize(); xx++) {
+                        for (int yy = 0; yy < gameWorld.getSize(); yy++) {
+                            if (gameWorld.get(xx, yy) == TerrainType.OPEN) {
+                                g.setColor(Color.LIGHT_GRAY);
+                            } else {
+                                g.setColor(Color.BLACK);
+                            }
+                            g.fillRect(xx * 10, yy * 10, 10, 10);
+                        }
+                    }
+                }
+
                 for (PlayerPosition pos : positions) {
                     if (playerId.equals(pos.getPlayerId())) {
                         g.setColor(Color.BLUE);
@@ -171,11 +177,11 @@ public class DemoClient extends JPanel implements KeyListener {
 
     @Override
     public void keyPressed(KeyEvent e) {
-        keyIsDown[e.getKeyCode()] = true;
+        current = new ClientKeyEvent(e.getKeyCode(), true);
     }
 
     @Override
     public void keyReleased(KeyEvent e) {
-        keyIsDown[e.getKeyCode()] = false;
+        current = new ClientKeyEvent(e.getKeyCode(), false);
     }
 }
