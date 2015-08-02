@@ -1,8 +1,6 @@
 package com.bb.common.net;
 
-import com.bb.common.data.ClientKeyEvent;
-import com.bb.common.data.GameWorld;
-import com.bb.common.data.PlayerPosition;
+import com.bb.common.data.*;
 
 /**
  * Created by jake on 7/25/15.
@@ -38,6 +36,10 @@ public class DataAccumulator {
                 return GameWorld.parse(data);
             } else if (ClientKeyEvent.matches(data)) {
                 return ClientKeyEvent.parse(data);
+            } else if (ClientShotAttempt.matches(data)) {
+                return ClientShotAttempt.parse(data);
+            } else if (ShotFired.matches(data)) {
+                return ShotFired.parse(data);
             } else {
                 System.out.println("Unknown data starting with '" + data.substring(0, 10) + "...'");
             }

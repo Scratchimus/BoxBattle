@@ -3,9 +3,6 @@ package com.bb.common.data;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Created by jake on 7/26/15.
- */
 public class GameWorld {
     private int size;
     private TerrainType[][] grid;
@@ -34,7 +31,14 @@ public class GameWorld {
     }
 
     public TerrainType get(int x, int y) {
+        if (!isValid(x, y)) {
+            return TerrainType.WALL;
+        }
         return grid[x][y];
+    }
+
+    private boolean isValid(int x, int y) {
+        return (x >= 0) && (x < size) && (y >= 0) && (y < size);
     }
 
     public String toString() {
@@ -71,10 +75,10 @@ public class GameWorld {
                     TerrainType type = TerrainType.valueOf(parts[idx]);
                     ret.grid[ii][jj] = type;
 
-                    ii++;
-                    if (ii >= size) {
-                        ii = 0;
-                        jj++;
+                    jj++;
+                    if (jj >= size) {
+                        jj = 0;
+                        ii++;
                     }
                 }
 

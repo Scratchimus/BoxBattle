@@ -1,17 +1,17 @@
-package com.bb.common.net;
+package com.bb.server;
 
-import com.bb.common.data.ClientKeyEvent;
-import com.bb.common.data.GameWorld;
-import com.bb.common.data.PlayerPosition;
+import com.bb.common.data.*;
+import com.bb.common.net.DataAccumulator;
 
+import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
+import java.util.List;
 
 /**
  * Created by jake on 7/25/15.
@@ -24,17 +24,21 @@ public class DemoServer {
     private int port;
     private GameWorld world;
     private Map<String, PlayerPosition> gameState;
+    private List<ShotFired> shots;
 
     public DemoServer(int port) {
         this.port = port;
         world = new GameWorld(30);
         world.populateRandomWalls();
         gameState = new HashMap<>();
+        shots = new ArrayList<>();
     }
 
     public void go() throws IOException {
         ServerSocketChannel ssc = ServerSocketChannel.open();
         ssc.bind(new InetSocketAddress(port));
+
+        new GameManagerThread().start();
 
         System.out.println("Server ready");
         while (true) {
@@ -47,6 +51,8 @@ public class DemoServer {
     private class HandlerThread extends Thread {
         SocketChannel sc;
         String playerId;
+        long lastShotTime;
+        long shotInterval = 500;
 
         public HandlerThread(SocketChannel sc) {
             this.sc = sc;
@@ -55,6 +61,7 @@ public class DemoServer {
         public void run() {
             DataAccumulator dac = new DataAccumulator();
             boolean[] keyDown = new boolean[256];
+
             try {
                 sc.configureBlocking(false);
                 ByteBuffer buffer = ByteBuffer.allocate(1024);
@@ -78,9 +85,9 @@ public class DemoServer {
                 while (true) {
                     readUpdatesFromClient(dac, buffer);
 
-                    processUpdatesFromClient(dac, keyDown);
+                    ClientShotAttempt csa = processUpdatesFromClient(dac, keyDown);
 
-                    updatePlayerState(keyDown);
+                    updatePlayerState(keyDown, csa);
 
                     if (System.currentTimeMillis() - lastTransmitTime > 20) {
                         sendStateToClient(sc);
@@ -120,25 +127,48 @@ public class DemoServer {
             }
         }
 
-        private void updatePlayerState(boolean[] keyDown) {
+        private void updatePlayerState(boolean[] keyDown, ClientShotAttempt shotAttempt) {
             PlayerPosition ppos = null;
             synchronized (gameState) {
                 ppos = gameState.get(playerId);
             }
 
             // TODO: Check for obstacles
+            int dx = 0, dy = 0;
             if (keyDown[KeyEvent.VK_UP]) {
-                ppos.setY(ppos.getY()-1);
+                dy = -1;
             } else if (keyDown[KeyEvent.VK_DOWN]) {
-                ppos.setY(ppos.getY()+1);
+                dy = 1;
             } else if (keyDown[KeyEvent.VK_LEFT]) {
-                ppos.setX(ppos.getX() - 1);
+                dx = -1;
             } else if (keyDown[KeyEvent.VK_RIGHT]) {
-                ppos.setX(ppos.getX() + 1);
+                dx = 1;
+            }
+
+            double newX = ppos.getX() + dx;
+            double newY = ppos.getY() + dy;
+            int xBlock = (int)(newX / 10);
+            int yBlock = (int)(newY / 10);
+
+            if (world.get(xBlock, yBlock) != TerrainType.WALL) {
+                ppos.setX(newX);
+                ppos.setY(newY);
+            } else {
+                System.out.println("Cannot move to " + newX + ", " + newY);
+                System.out.println("      Checking the terrain at " + xBlock + ", " + yBlock);
+            }
+
+            if (shotAttempt != null) {
+                long now = System.currentTimeMillis();
+                if (now - lastShotTime > shotInterval) {
+                    shots.add(new ShotFired(new Point((int)ppos.getX(), (int)ppos.getY()), shotAttempt.getAimPt()));
+                    lastShotTime = now;
+                }
             }
         }
 
-        private void processUpdatesFromClient(DataAccumulator dac, boolean[] keyDown) {
+        private ClientShotAttempt processUpdatesFromClient(DataAccumulator dac, boolean[] keyDown) {
+            ClientShotAttempt ret = null;
             while (dac.hasData()) {
                 Object obj = dac.getData();
                 if (obj instanceof PlayerPosition) {
@@ -152,8 +182,11 @@ public class DemoServer {
                 } else if (obj instanceof ClientKeyEvent) {
                     ClientKeyEvent cke = (ClientKeyEvent)obj;
                     keyDown[cke.getKeyCode()] = cke.isDown();
+                } else if (obj instanceof ClientShotAttempt) {
+                    ret = (ClientShotAttempt)obj;
                 }
             }
+            return ret;
         }
 
         private void sendStateToClient(SocketChannel sc) throws IOException {
@@ -163,8 +196,35 @@ public class DemoServer {
                     bld.append(pp.toString()).append(DataAccumulator.DELIMITER);
                 }
             }
+            synchronized (shots) {
+                for (ShotFired s : shots) {
+                    bld.append(s.toString()).append(DataAccumulator.DELIMITER);
+                }
+            }
 
             sc.write(ByteBuffer.wrap(bld.toString().getBytes()));
+        }
+    }
+
+    private class GameManagerThread extends Thread {
+        public void run() {
+            while (true) {
+                try {
+                    Thread.sleep(500);
+
+                    synchronized (shots) {
+                        Iterator<ShotFired> iter = shots.iterator();
+                        while (iter.hasNext()) {
+                            ShotFired sf = iter.next();
+                            if (sf.expired()) {
+                                iter.remove();
+                            }
+                        }
+                    }
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
         }
     }
 }

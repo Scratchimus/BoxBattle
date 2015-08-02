@@ -1,31 +1,33 @@
-package com.bb.common.net;
+package com.bb.client;
 
-import com.bb.common.data.ClientKeyEvent;
-import com.bb.common.data.GameWorld;
-import com.bb.common.data.PlayerPosition;
-import com.bb.common.data.TerrainType;
+import com.bb.common.data.*;
+import com.bb.common.net.DataAccumulator;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.KeyEvent;
-import java.awt.event.KeyListener;
+import java.awt.event.*;
 import java.awt.image.BufferedImage;
-import java.awt.image.BufferedImageFilter;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.util.*;
+import java.util.List;
 
 /**
  * Created by jake on 7/25/15.
  */
-public class DemoClient extends JPanel implements KeyListener {
+public class DemoClient extends JPanel implements KeyListener, MouseListener, MouseMotionListener {
     private String playerId;
     private PlayerPosition myPosition;
-    private volatile GameWorld gameWorld;
+    private GameWorld gameWorld;
+    private List<ShotFired> shots;
     private Map<String, PlayerPosition> gameState;
-    private volatile ClientKeyEvent current;
+    private ClientKeyEvent current;
+    private ClientShotAttempt currentMouse;
+    private Point aimPt;
+    private boolean mouseDown;
+    private long lastShotAttempt;
 
     public static void main(String[] args) throws IOException {
         JFrame host = new JFrame();
@@ -39,6 +41,7 @@ public class DemoClient extends JPanel implements KeyListener {
 
     public DemoClient() {
         gameState = new HashMap<>();
+        shots = new ArrayList<>();
 
         Dimension dim = new Dimension(800, 600);
         setSize(dim);
@@ -47,6 +50,8 @@ public class DemoClient extends JPanel implements KeyListener {
 
         addKeyListener(this);
         setFocusable(true);
+        addMouseListener(this);
+        addMouseMotionListener(this);
     }
 
     public void startBackgroundThreads(SocketChannel sc) {
@@ -64,6 +69,7 @@ public class DemoClient extends JPanel implements KeyListener {
         @Override
         public void run() {
             try {
+                System.out.println("CLIENT is now connected to the server");
                 sc.configureBlocking(false);
                 DataAccumulator dac = new DataAccumulator();
                 ByteBuffer buffer = ByteBuffer.allocate(1024);
@@ -72,6 +78,7 @@ public class DemoClient extends JPanel implements KeyListener {
                     readUpdatesFromServer(dac, buffer);
 
                     processUpdatesFromServer(dac);
+                    pruneDeadShots();
 
                     sendInputUpdatesToServer();
 
@@ -82,10 +89,30 @@ public class DemoClient extends JPanel implements KeyListener {
             }
         }
 
+        private void pruneDeadShots() {
+            synchronized (shots) {
+                Iterator<ShotFired> iter = shots.iterator();
+                while (iter.hasNext()) {
+                    ShotFired sf = iter.next();
+                    if (sf.expired()) {
+                        iter.remove();
+                    }
+                }
+            }
+        }
+
         private void sendInputUpdatesToServer() throws IOException {
-            ClientKeyEvent toSend = current;
-            if (toSend != null) {
-                sc.write(ByteBuffer.wrap((toSend.toString() + DataAccumulator.DELIMITER).getBytes()));
+            ClientKeyEvent keyToSend = current;
+            if (keyToSend != null) {
+                sc.write(ByteBuffer.wrap((keyToSend.toString() + DataAccumulator.DELIMITER).getBytes()));
+                current = null;
+            }
+
+            long now = System.currentTimeMillis();
+            if (mouseDown && now - lastShotAttempt > 50 && aimPt != null) {
+                ClientShotAttempt shotAttempt = new ClientShotAttempt(aimPt);
+                sc.write(ByteBuffer.wrap((shotAttempt.toString() + DataAccumulator.DELIMITER).getBytes()));
+                lastShotAttempt = now;
             }
         }
 
@@ -114,13 +141,15 @@ public class DemoClient extends JPanel implements KeyListener {
                     synchronized (gameState) {
                         gameState.put(pos.getPlayerId(), pos);
                     }
+                } else if (obj instanceof ShotFired) {
+                    shots.add((ShotFired)obj);
                 }
             }
         }
 
-        private void sendPositionToServer(SocketChannel sc) throws IOException {
-            sc.write(ByteBuffer.wrap((myPosition.toString() + DataAccumulator.DELIMITER).getBytes()));
-        }
+//        private void sendPositionToServer(SocketChannel sc) throws IOException {
+//            sc.write(ByteBuffer.wrap((myPosition.toString() + DataAccumulator.DELIMITER).getBytes()));
+//        }
     }
 
     private class RepaintThread extends Thread {
@@ -155,12 +184,24 @@ public class DemoClient extends JPanel implements KeyListener {
                     }
                 }
 
+                List<ShotFired> shotsToDraw = new ArrayList<>();
+                synchronized (shots) {
+                    shotsToDraw.addAll(shots);
+                }
+
+                for (ShotFired sf : shotsToDraw) {
+                    g.setColor(Color.RED);
+                    g.drawLine(sf.getOrigin().x, sf.getOrigin().y, sf.getTarget().x, sf.getTarget().y);
+                }
+
                 for (PlayerPosition pos : positions) {
                     if (playerId.equals(pos.getPlayerId())) {
                         g.setColor(Color.BLUE);
                     } else {
                         g.setColor(Color.RED);
                     }
+                    g.fillRect((int) (pos.getX()) - 5, (int) (pos.getY() - 5), 11, 11);
+                    g.setColor(Color.BLACK);
                     g.fillRect((int) (pos.getX()) - 3, (int) (pos.getY() - 3), 7, 7);
                 }
 
@@ -173,15 +214,20 @@ public class DemoClient extends JPanel implements KeyListener {
         }
     }
 
-    public void keyTyped(KeyEvent e) {}
-
-    @Override
-    public void keyPressed(KeyEvent e) {
-        current = new ClientKeyEvent(e.getKeyCode(), true);
-    }
-
-    @Override
+    public void keyPressed(KeyEvent e) { current = new ClientKeyEvent(e.getKeyCode(), true); }
     public void keyReleased(KeyEvent e) {
         current = new ClientKeyEvent(e.getKeyCode(), false);
     }
+    public void mousePressed(MouseEvent e) {
+        mouseDown = true;
+    }
+    public void mouseReleased(MouseEvent e) { mouseDown = false; }
+    public void mouseDragged(MouseEvent e) { aimPt = e.getPoint(); }
+    public void mouseMoved(MouseEvent e) { aimPt = e.getPoint(); }
+
+    // Currently unused
+    public void keyTyped(KeyEvent e) {}
+    public void mouseClicked(MouseEvent e) {}
+    public void mouseEntered(MouseEvent e) {}
+    public void mouseExited(MouseEvent e) {}
 }
