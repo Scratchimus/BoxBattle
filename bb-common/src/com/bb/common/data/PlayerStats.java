@@ -6,15 +6,19 @@ import java.util.regex.Pattern;
 /**
  * Created by jake on 7/25/15.
  */
-public class PlayerPosition {
-    public static final java.lang.String PREFIX = "PlayerLocation";
+public class PlayerStats {
+    public static final java.lang.String PREFIX = "PlayerStats";
     private String playerId;
     private double x, y;
+    private int health;
+    private boolean bot;
 
-    public PlayerPosition(String playerId, double x, double y) {
+    public PlayerStats(String playerId, double x, double y, int health, boolean bot) {
         this.playerId = playerId;
         this.x = x;
         this.y = y;
+        this.health = health;
+        this.bot = bot;
     }
 
     public String getPlayerId() {
@@ -37,12 +41,24 @@ public class PlayerPosition {
         this.y = y;
     }
 
-    @Override
-    public String toString() {
-        return PREFIX + "{" + playerId + "," + x + "," + y + "}";
+    public int getHealth() {
+        return health;
     }
 
-    public static PlayerPosition parse(String data) {
+    public void setHealth(int health) {
+        this.health = health;
+    }
+
+    public boolean isBot() {
+        return bot;
+    }
+
+    @Override
+    public String toString() {
+        return PREFIX + "{" + playerId + "," + x + "," + y + "," + health + "," + bot + "}";
+    }
+
+    public static PlayerStats parse(String data) {
         Pattern p = Pattern.compile(PREFIX + "\\{(.*)\\}");
         Matcher m = p.matcher(data);
         if (m.matches()) {
@@ -52,8 +68,10 @@ public class PlayerPosition {
                 String playerId = parts[0];
                 double x = Double.parseDouble(parts[1]);
                 double y = Double.parseDouble(parts[2]);
+                int health = Integer.parseInt(parts[3]);
+                boolean bot = Boolean.parseBoolean(parts[4]);
 
-                return new PlayerPosition(playerId, x, y);
+                return new PlayerStats(playerId, x, y, health, bot);
             }
         }
         return null;

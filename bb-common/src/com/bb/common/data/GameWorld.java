@@ -4,6 +4,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class GameWorld {
+    public static final int CELL_SIZE = 15;
+
     private int size;
     private TerrainType[][] grid;
     private static final String PREFIX = "GameWorld";

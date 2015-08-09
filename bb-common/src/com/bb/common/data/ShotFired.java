@@ -9,6 +9,7 @@ import java.util.regex.Pattern;
  */
 public class ShotFired {
     private static final String PREFIX = "ShotFired";
+    public static final long MAX_RENDER_AGE = 500;
 
     private static int NEXT_ID = 0;
 
@@ -48,7 +49,11 @@ public class ShotFired {
     }
 
     public boolean expired() {
-        return System.currentTimeMillis() - createTime > 500;
+        return age() > MAX_RENDER_AGE;
+    }
+
+    public long age() {
+        return System.currentTimeMillis() - createTime;
     }
 
     public static boolean matches(String data) {

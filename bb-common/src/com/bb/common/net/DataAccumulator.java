@@ -30,8 +30,8 @@ public class DataAccumulator {
             String data = builder.substring(0, pos);
             builder.replace(0, pos + DELIMITER.length(), "");
 
-            if (PlayerPosition.matches(data)) {
-                return PlayerPosition.parse(data);
+            if (PlayerStats.matches(data)) {
+                return PlayerStats.parse(data);
             } else if (GameWorld.matches(data)) {
                 return GameWorld.parse(data);
             } else if (ClientKeyEvent.matches(data)) {
@@ -40,6 +40,8 @@ public class DataAccumulator {
                 return ClientShotAttempt.parse(data);
             } else if (ShotFired.matches(data)) {
                 return ShotFired.parse(data);
+            } else if (TimingPacket.matches(data)) {
+                return TimingPacket.parse(data);
             } else {
                 System.out.println("Unknown data starting with '" + data.substring(0, 10) + "...'");
             }
